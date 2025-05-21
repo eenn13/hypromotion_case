@@ -48,8 +48,8 @@ export class StatisticsService implements OnModuleDestroy {
         const values = await pipeline.exec();
 
         keys.forEach((key, index) => {
-          const [err, count] = values[index];
-          if (!err && count !== null) {
+          const count = values[index];
+          if (count !== null) {
             statistics[key] = parseInt(count, 10);
           }
         });
