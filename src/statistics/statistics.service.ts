@@ -31,7 +31,6 @@ export class StatisticsService implements OnModuleDestroy {
   async getAllStatistics(): Promise<Record<string, number>> {
     const statistics: Record<string, number> = {};
 
-    // cursor değişkenini string olarak tanımlıyoruz.
     let cursorCount = '0';
 
     do {
