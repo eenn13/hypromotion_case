@@ -34,4 +34,4 @@ Docker
 
 If you want to clear all data stored in Redis, you can run the following command:
 
-docker exec -it <container-name> redis-cli FLUSHALL
+docker exec -it "container-name" redis-cli FLUSHALL
