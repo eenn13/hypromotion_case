@@ -10,11 +10,13 @@ export class StatisticsService implements OnModuleDestroy {
       url: 'redis://127.0.0.1:6379',
       socket: {
         keepAlive: true,
-        reconnectStrategy: (retries) => Math.min(retries * 50, 1000)
-      }
+        reconnectStrategy: (retries) => Math.min(retries * 50, 1000),
+      },
     });
 
-    this.redisClient.on('error', (err) => console.error('Redis Client Error', err));
+    this.redisClient.on('error', (err) =>
+      console.error('Redis Client Error', err),
+    );
     this.redisClient.connect();
   }
 
@@ -28,20 +30,23 @@ export class StatisticsService implements OnModuleDestroy {
 
   async getAllStatistics(): Promise<Record<string, number>> {
     const statistics: Record<string, number> = {};
-    let cursor = 0;
-    
+
+    // cursor değişkenini string olarak tanımlıyoruz.
+    let cursorCount = '0';
+
     do {
-      const [nextCursor, keys] = await this.redisClient.scan(cursor, {
+      const { cursor, keys } = await this.redisClient.scan(cursorCount, {
         MATCH: '*',
-        COUNT: 100
+        COUNT: 100,
       });
-      cursor = nextCursor;
+      cursorCount = cursor;
 
       if (keys.length > 0) {
         const pipeline = this.redisClient.multi();
-        keys.forEach(key => pipeline.get(key));
+        keys.forEach((key) => pipeline.get(key));
+
         const values = await pipeline.exec();
-        
+
         keys.forEach((key, index) => {
           const [err, count] = values[index];
           if (!err && count !== null) {
@@ -49,8 +54,8 @@ export class StatisticsService implements OnModuleDestroy {
           }
         });
       }
-    } while (cursor !== 0);
+    } while (cursorCount !== '0');
 
     return statistics;
   }
-} 
+}
