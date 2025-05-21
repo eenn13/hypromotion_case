@@ -7,12 +7,14 @@ export class StatisticsService implements OnModuleDestroy {
 
   constructor() {
     this.redisClient = createClient({
-      url: 'redis://localhost:6379',
+      url: 'redis://127.0.0.1:6379',
       socket: {
         keepAlive: true,
         reconnectStrategy: (retries) => Math.min(retries * 50, 1000)
       }
     });
+
+    this.redisClient.on('error', (err) => console.error('Redis Client Error', err));
     this.redisClient.connect();
   }
 
@@ -41,8 +43,8 @@ export class StatisticsService implements OnModuleDestroy {
         const values = await pipeline.exec();
         
         keys.forEach((key, index) => {
-          const count = values[index];
-          if (count !== null) {
+          const [err, count] = values[index];
+          if (!err && count !== null) {
             statistics[key] = parseInt(count, 10);
           }
         });
