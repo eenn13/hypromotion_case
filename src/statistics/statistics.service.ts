@@ -25,7 +25,7 @@ export class StatisticsService implements OnModuleDestroy {
   }
 
   async updateStatistics(countryCode: string): Promise<void> {
-    await this.redisClient.incr(countryCode);
+    await this.redisClient.incr(countryCode); // Increment the count for the given country code
   }
 
   async getAllStatistics(): Promise<Record<string, number>> {
@@ -41,6 +41,8 @@ export class StatisticsService implements OnModuleDestroy {
       cursorCount = cursor;
 
       if (keys.length > 0) {
+        // Use pipeline to fetch all keys in one go
+        // This is more efficient than fetching them one by
         const pipeline = this.redisClient.multi();
         keys.forEach((key) => pipeline.get(key));
 
@@ -53,7 +55,7 @@ export class StatisticsService implements OnModuleDestroy {
           }
         });
       }
-    } while (cursorCount !== '0');
+    } while (cursorCount !== '0'); // Continue until cursor is '0'
 
     return statistics;
   }
