@@ -7,7 +7,7 @@ export class StatisticsService implements OnModuleDestroy {
 
   constructor() {
     this.redisClient = createClient({
-      url: 'redis://127.0.0.1:6379',
+      url: process.env.REDIS_URL,
       socket: {
         keepAlive: true,
         reconnectStrategy: (retries) => Math.min(retries * 50, 1000),
@@ -25,37 +25,66 @@ export class StatisticsService implements OnModuleDestroy {
   }
 
   async updateStatistics(countryCode: string): Promise<void> {
-    await this.redisClient.incr(countryCode); // Increment the count for the given country code
+    if (typeof countryCode !== 'string' || countryCode.trim() === '') {
+      throw new Error(
+        'updateStatistics: countryCode must be a non-empty string',
+      );
+    }
+    try {
+      await this.redisClient.incr(countryCode); // Increment the count for the given country code
+    } catch (error) {
+      console.error(
+        `Redis INCR error (key: ${countryCode}): ${(error as Error).message}`,
+        error,
+      );
+      throw new Error('Failed to update statistics (Redis error)');
+    }
   }
 
   async getAllStatistics(): Promise<Record<string, number>> {
     const statistics: Record<string, number> = {};
+    let cursor = '0';
 
-    let cursorCount = '0';
-
-    do {
-      const { cursor, keys } = await this.redisClient.scan(cursorCount, {
-        MATCH: '*',
-        COUNT: 100,
-      });
-      cursorCount = cursor;
-
-      if (keys.length > 0) {
-        // Use pipeline to fetch all keys in one go
-        // This is more efficient than fetching them one by
-        const pipeline = this.redisClient.multi();
-        keys.forEach((key) => pipeline.get(key));
-
-        const values = await pipeline.exec();
-
-        keys.forEach((key, index) => {
-          const count = values[index];
-          if (count !== null) {
-            statistics[key] = parseInt(count, 10);
-          }
+    try {
+      do {
+        // ---------- SCAN ----------
+        const scanRes = await this.redisClient.scan(cursor, {
+          MATCH: '*',
+          COUNT: 100,
         });
-      }
-    } while (cursorCount !== '0'); // Continue until cursor is '0'
+        cursor = scanRes.cursor;
+        const keys = scanRes.keys;
+
+        if (keys.length) {
+          // ---------- MULTI/PIPELINE ----------
+          const pipeline = this.redisClient.multi();
+          keys.forEach((k) => pipeline.get(k));
+          const rawResults = await pipeline.exec(); //  [[null,'123'], [Error,...]] / ['123', ...] = ioredis vs node-redis
+
+          // node-redis (v4) ⇒ string[]  |  ioredis ⇒ [err,value][]
+          rawResults.forEach((res, idx) => {
+            // ioredis: res = [err, value]
+            const value = Array.isArray(res) && res.length === 2 ? res[1] : res;
+            // Log the error
+            if (Array.isArray(res) && res[0]) {
+              console.warn(
+                `Redis GET error (key: ${keys[idx]}): ${(res[0] as Error).message}`,
+              );
+              return; //
+            }
+
+            // If the value can be converted to a number, add it
+            const num = parseInt(String(value), 10);
+            if (!Number.isNaN(num)) {
+              statistics[keys[idx]] = num;
+            }
+          });
+        }
+      } while (cursor !== '0');
+    } catch (err) {
+      console.error(`getAllStatistics error: ${(err as Error).message}`, err);
+      throw new Error('Failed to get all statistics (Redis error)');
+    }
 
     return statistics;
   }
